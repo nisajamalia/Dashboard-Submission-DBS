@@ -46,7 +46,34 @@ customer_loyalty = (
 )
 
 st.sidebar.title("Filter")
+
+# Date Filter
+min_date = df["order_purchase_timestamp"].min().date()
+max_date = df["order_purchase_timestamp"].max().date()
+
+try:
+    start_date, end_date = st.sidebar.date_input(
+        "Rentang Waktu",
+        min_value=min_date,
+        max_value=max_date,
+        value=[min_date, max_date]
+    )
+except ValueError:
+    st.error("Pilih rentang waktu (Mulai & Selesai)")
+    st.stop()
+
+# Filter DataFrame
+main_df = df[(df["order_purchase_timestamp"].dt.date >= start_date) & 
+             (df["order_purchase_timestamp"].dt.date <= end_date)]
+
 top_n = st.sidebar.slider("Tampilkan Top N Kategori", min_value=5, max_value=20, value=10)
+
+# Aggregations for main_df
+revenue_by_cat = (
+    main_df.groupby("product_category_name_english")["price"]
+    .sum().sort_values(ascending=False).reset_index()
+)
+revenue_by_cat.columns = ["category", "total_revenue"]
 
 all_cats = revenue_by_cat["category"].tolist()
 selected_cats = st.sidebar.multiselect(
@@ -63,10 +90,10 @@ st.markdown(
 )
 st.markdown("---")
 
-total_rev    = df["price"].sum()
-total_orders = df["order_id"].nunique()
-total_cust   = df["customer_unique_id"].nunique()
-avg_order    = total_rev / total_orders
+total_rev    = main_df["price"].sum()
+total_orders = main_df["order_id"].nunique()
+total_cust   = main_df["customer_unique_id"].nunique()
+avg_order    = total_rev / total_orders if total_orders > 0 else 0
 
 col1, col2, col3, col4 = st.columns(4)
 col1.metric("Total Revenue", format_idr(total_rev))
@@ -103,19 +130,16 @@ with col_right:
     show_df.columns = ["Kategori", "Total Revenue"]
     st.dataframe(show_df, use_container_width=True, hide_index=True)
 
-    st.subheader("Kontribusi Top 5")
-    top5_share = revenue_by_cat.head(5)["total_revenue"].sum() / total_rev * 100
-    st.metric("Top 5 kategori menyumbang", f"{top5_share:.1f}% dari total revenue")
-
 st.subheader("Tren Revenue Bulanan")
 if selected_cats:
-    df_trend = df[df["product_category_name_english"].isin(selected_cats)]
+    df_trend = main_df[main_df["product_category_name_english"].isin(selected_cats)]
     monthly = df_trend.groupby(["month", "product_category_name_english"])["price"].sum().reset_index()
 
     fig2, ax2 = plt.subplots(figsize=(12, 4))
     for cat in selected_cats:
         d = monthly[monthly["product_category_name_english"] == cat]
-        ax2.plot(d["month"], d["price"], marker="o", markersize=4, label=cat)
+        if not d.empty:
+            ax2.plot(d["month"], d["price"], marker="o", markersize=4, label=cat)
     ax2.set_title("Tren Revenue Bulanan per Kategori", fontweight="bold")
     ax2.set_ylabel("Revenue (Rp)")
     ax2.yaxis.set_major_formatter(mticker.FuncFormatter(lambda x, _: format_idr(x)))
@@ -129,7 +153,38 @@ else:
 
 st.markdown("---")
 
-st.header("Pertanyaan 2: Pelanggan Paling Loyal")
+st.header("Pertanyaan 2: Performa Penjualan dan Revenue")
+
+st.subheader("Tren Order dan Revenue Bulanan")
+monthly_perf = main_df.groupby("month").agg(
+    order_count=("order_id", "nunique"),
+    revenue=("price", "sum")
+).reset_index()
+
+fig_perf, ax_rev = plt.subplots(figsize=(12, 5))
+ax_order = ax_rev.twinx()
+
+ax_rev.bar(monthly_perf["month"], monthly_perf["revenue"], color="#3498db", alpha=0.3, label="Revenue")
+ax_order.plot(monthly_perf["month"], monthly_perf["order_count"], color="#e67e22", marker="o", linewidth=2, label="Order Count")
+
+ax_rev.set_ylabel("Total Revenue (Rp)", color="#3498db", fontweight="bold")
+ax_order.set_ylabel("Total Orders", color="#e67e22", fontweight="bold")
+ax_rev.yaxis.set_major_formatter(mticker.FuncFormatter(lambda x, _: format_idr(x)))
+
+plt.title("Performa Penjualan & Revenue Bulanan", fontweight="bold")
+plt.xticks(rotation=45)
+plt.tight_layout()
+st.pyplot(fig_perf)
+plt.close()
+
+st.markdown("---")
+st.header("Analisis Tambahan: Loyalitas & RFM")
+
+customer_loyalty = (
+    main_df.groupby("customer_unique_id")
+    .agg(order_count=("order_id", "nunique"), total_spent=("price", "sum"))
+    .reset_index()
+)
 
 col_a, col_b = st.columns(2)
 
@@ -151,25 +206,28 @@ with col_a:
 with col_b:
     st.subheader("Frekuensi vs Total Pengeluaran")
     multi = customer_loyalty[customer_loyalty["order_count"] > 1]
-    fig4, ax4 = plt.subplots(figsize=(6, 4))
-    sc = ax4.scatter(multi["order_count"], multi["total_spent"],
-                     alpha=0.55, c=multi["total_spent"], cmap="YlOrRd",
-                     edgecolors="white", linewidth=0.3, s=55)
-    plt.colorbar(sc, ax=ax4, label="Total Spent (Rp)")
-    ax4.set_xlabel("Jumlah Order")
-    ax4.set_ylabel("Total Pengeluaran (Rp)")
-    ax4.yaxis.set_major_formatter(mticker.FuncFormatter(lambda x, _: format_idr(x)))
-    ax4.set_title("Loyalitas: Frekuensi vs Total Belanja", fontweight="bold", fontsize=11)
-    plt.tight_layout()
-    st.pyplot(fig4)
-    plt.close()
+    if not multi.empty:
+        fig4, ax4 = plt.subplots(figsize=(6, 4))
+        sc = ax4.scatter(multi["order_count"], multi["total_spent"],
+                         alpha=0.55, c=multi["total_spent"], cmap="YlOrRd",
+                         edgecolors="white", linewidth=0.3, s=55)
+        plt.colorbar(sc, ax=ax4, label="Total Spent (Rp)")
+        ax4.set_xlabel("Jumlah Order")
+        ax4.set_ylabel("Total Pengeluaran (Rp)")
+        ax4.yaxis.set_major_formatter(mticker.FuncFormatter(lambda x, _: format_idr(x)))
+        ax4.set_title("Loyalitas: Frekuensi vs Total Belanja", fontweight="bold", fontsize=11)
+        plt.tight_layout()
+        st.pyplot(fig4)
+        plt.close()
+    else:
+        st.info("Tidak ada data pelanggan dengan lebih dari 1 order pada filter ini.")
 
 st.subheader("Top 10 Pelanggan Paling Loyal")
 top_loyal = (
     customer_loyalty.sort_values(["order_count", "total_spent"], ascending=False)
     .head(10).reset_index(drop=True)
 )
-top_loyal["Rank"] = range(1, 11)
+top_loyal["Rank"] = range(1, len(top_loyal) + 1)
 top_loyal["customer_unique_id"] = top_loyal["customer_unique_id"].str[:16] + "..."
 top_loyal["total_spent"] = top_loyal["total_spent"].map(lambda x: format_idr(x, 2))
 top_loyal = top_loyal.rename(columns={
@@ -178,9 +236,6 @@ top_loyal = top_loyal.rename(columns={
     "total_spent": "Total Belanja"
 })[["Rank", "Customer ID", "Jumlah Order", "Total Belanja"]]
 st.dataframe(top_loyal, use_container_width=True, hide_index=True)
-
-st.markdown("---")
-st.header("Analisis Lanjutan: RFM Segmentasi")
 
 @st.cache_data
 def compute_rfm(_df):
@@ -207,7 +262,8 @@ def compute_rfm(_df):
     rfm["Segment"] = rfm["RFM_Score"].apply(seg)
     return rfm
 
-rfm = compute_rfm(df)
+st.subheader("Segmentasi Pelanggan (RFM)")
+rfm = compute_rfm(main_df)
 seg_counts = rfm["Segment"].value_counts()
 
 col_pie, col_rfm_table = st.columns([2, 3])
@@ -217,7 +273,7 @@ with col_pie:
     ax5.pie(seg_counts, labels=seg_counts.index, autopct="%1.1f%%",
             colors=colors[:len(seg_counts)], startangle=140,
             wedgeprops=dict(edgecolor="white", linewidth=2))
-    ax5.set_title("Segmentasi Pelanggan (RFM)", fontweight="bold")
+    ax5.set_title("Proporsi Segmen Pelanggan", fontweight="bold")
     plt.tight_layout()
     st.pyplot(fig5)
     plt.close()
@@ -238,21 +294,5 @@ with col_rfm_table:
     seg_summary["Avg_Frequency"] = seg_summary["Avg_Frequency"].map("{:.1f}x".format)
     seg_summary["Avg_Monetary"]  = seg_summary["Avg_Monetary"].map(lambda x: format_idr(x, 2))
     st.dataframe(seg_summary, use_container_width=True, hide_index=True)
-
-st.markdown("---")
-st.header("Kesimpulan")
-st.markdown("""
-**Pertanyaan 1 — Kategori produk dengan revenue tertinggi:**
-> Dari hasil analisis, kategori **health_beauty** jadi yang paling tinggi revenue-nya, sekitar Rp3,7 Miliar.  
-> Setelah itu disusul sama **watches_gifts** dan **bed_bath_table**.  
-> Kalau dilihat, 5 kategori teratas ini nyumbang lebih dari 35% total revenue keseluruhan.  
-> Selain itu, trennya juga kelihatan naik secara konsisten dari tahun 2017 sampai 2018.
-
-**Pertanyaan 2 — Pelanggan paling loyal:**
-> Dari data yang ada, sekitar **97% pelanggan cuma beli 1 kali aja**, jadi bisa dibilang tingkat loyalitasnya masih rendah.  
-> Berdasarkan analisis RFM, mayoritas pelanggan masuk ke kategori *At Risk* atau *Lost*.  
-> Artinya, banyak pelanggan yang berpotensi nggak balik lagi.  
-> Jadi, penting banget buat bikin program loyalitas atau strategi re-engagement biar mereka tertarik buat belanja lagi.
-""")
 
 st.caption("Dashboard dibuat menggunakan Streamlit · E-Commerce Public Dataset (Olist)")
