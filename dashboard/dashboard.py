@@ -86,7 +86,7 @@ st.title("E-Commerce Public Dataset — Analisis Dashboard")
 st.markdown(
     "**Nama:** Nisa Jamalia Hanif &nbsp;|&nbsp; "
     "**Email:** nisajamalia99@gmail.com &nbsp;|&nbsp; "
-    "**ID Dicoding:** CDCC005D6X2688"
+    "**ID Dicoding:** nisajamalia-9899"
 )
 st.markdown("---")
 
