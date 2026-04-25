@@ -1,21 +1,23 @@
-# Dicoding Collection Dashboard
+# Dashboard DBS Analisis Data
 
 ## E-Commerce Public Dataset — Analisis Dashboard
 
 **Nama:** Nisa Jamalia Hanif  
-**Email:** nisajamalia99@gmail.com  
+**Email:** 1995nisajamaila@gmail.com
 **ID Dicoding:** CDCC005D6X2688
 
 ---
 
 ## Deskripsi Proyek
 
-Project ini merupakan analisis data dari **Brazilian E-Commerce Public Dataset by Olist**, mencakup lebih dari 100.000 transaksi e-commerce dari tahun 2016–2018. Analisis difokuskan pada dua pertanyaan bisnis utama diantaranya :
+Project ini membahas analisis data dari Brazilian E-Commerce Public Dataset by Olist, yang berisi lebih dari 100.000 transaksi e-commerce pada periode 2016–2018.
 
-1. **Kategori produk apa yang paling banyak menghasilkan revenue?**
-2. **Siapa pelanggan paling loyal berdasarkan frekuensi dan total pembelian?**
+Fokus analisis pada project ini ada dua pertanyaan utama, yaitu:
 
-Selain analisis eksploratif, Project ini juga mencakup **RFM Segmentation** (Recency, Frequency, Monetary) untuk mengidentifikasi segmen pelanggan secara lebih mendalam.
+Kategori produk apa yang menghasilkan revenue paling tinggi
+Siapa saja pelanggan paling loyal dilihat dari frekuensi pembelian dan total belanja
+
+Selain itu, project ini juga dilengkapi dengan analisis RFM Segmentation (Recency, Frequency, Monetary) untuk mengelompokkan pelanggan berdasarkan perilaku mereka, sehingga bisa memberikan insight yang lebih dalam terkait karakteristik tiap segmen pelanggan.
 
 ---
 
