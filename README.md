@@ -3,7 +3,7 @@
 ## E-Commerce Public Dataset — Analisis Dashboard
 
 **Nama:** Nisa Jamalia Hanif  
-**Email:** nisajamalia99@gmail.com  
+**Email:** 1995nisajamaila@gmail.com
 **ID Dicoding:** CDCC005D6X2688
 
 ---
