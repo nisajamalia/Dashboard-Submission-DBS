@@ -1,4 +1,4 @@
-# Dicoding Collection Dashboard
+# Dashboard DBS Analisis Data
 
 ## E-Commerce Public Dataset — Analisis Dashboard
 
