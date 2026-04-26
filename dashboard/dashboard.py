@@ -47,7 +47,6 @@ customer_loyalty = (
 
 st.sidebar.title("Filter")
 
-# Date Filter
 min_date = df["order_purchase_timestamp"].min().date()
 max_date = df["order_purchase_timestamp"].max().date()
 
@@ -62,13 +61,11 @@ except ValueError:
     st.error("Pilih rentang waktu (Mulai & Selesai)")
     st.stop()
 
-# Filter DataFrame
 main_df = df[(df["order_purchase_timestamp"].dt.date >= start_date) & 
              (df["order_purchase_timestamp"].dt.date <= end_date)]
 
 top_n = st.sidebar.slider("Tampilkan Top N Kategori", min_value=5, max_value=20, value=10)
 
-# Aggregations for main_df
 revenue_by_cat = (
     main_df.groupby("product_category_name_english")["price"]
     .sum().sort_values(ascending=False).reset_index()
@@ -155,7 +152,6 @@ st.markdown("---")
 
 st.header("Pertanyaan 2: Analisis Pertumbuhan Revenue")
 
-# 1. Identifikasi Mode Perbandingan (Tahunan atau Bulanan)
 main_df_comp = main_df.copy()
 available_years = sorted(main_df_comp['order_purchase_timestamp'].dt.year.unique())
 available_months = sorted(main_df_comp['order_purchase_timestamp'].dt.to_period('M').unique())
@@ -170,7 +166,7 @@ elif len(available_months) >= 2:
     comp_mode = "Bulanan"
     p_start = available_months[0]
     p_end = available_months[-1]
-    # Konversi ke string untuk label dan pivot
+    
     main_df_comp['period'] = main_df_comp['order_purchase_timestamp'].dt.to_period('M').astype(str)
     p_start = str(p_start)
     p_end = str(p_end)
@@ -178,19 +174,18 @@ elif len(available_months) >= 2:
 if comp_mode:
     st.subheader(f"Perbandingan Pertumbuhan ({comp_mode}): {p_start} vs {p_end}")
     
-    # Filter data hanya untuk dua titik waktu yang dibandingkan
+    
     df_comp = main_df_comp[main_df_comp['period'].isin([p_start, p_end])]
     revenue_comparison = df_comp.groupby(['period', 'product_category_name_english'])['price'].sum().reset_index()
 
-    # Pivot data untuk menghitung growth
+    
     pivot_revenue = revenue_comparison.pivot(index='product_category_name_english', columns='period', values='price').fillna(0)
     
-    # Pastikan kedua kolom ada sebelum menghitung selisih
+    
     if p_start in pivot_revenue.columns and p_end in pivot_revenue.columns:
         pivot_revenue['revenue_growth'] = pivot_revenue[p_end] - pivot_revenue[p_start]
         pivot_revenue = pivot_revenue.sort_values(by='revenue_growth', ascending=False)
 
-        # 2. Visualisasi Perbandingan Total Revenue
         total_s = pivot_revenue[p_start].sum()
         total_e = pivot_revenue[p_end].sum()
 
@@ -208,7 +203,6 @@ if comp_mode:
         st.pyplot(fig_comp)
         plt.close()
 
-        # 3. Visualisasi Top 10 Kategori dengan Kenaikan Revenue Terbesar
         st.subheader(f"Top 10 Kategori dengan Kenaikan Terbesar")
         top_growth = pivot_revenue.head(10)
 
@@ -238,7 +232,6 @@ if comp_mode:
         st.warning("Data perbandingan tidak mencukupi untuk filter yang dipilih.")
 
 else:
-    # Fallback jika hanya satu bulan: Tampilkan tren harian
     st.subheader("Tren Performa Penjualan & Revenue Harian")
     main_df['day'] = main_df['order_purchase_timestamp'].dt.date
     daily_perf = main_df.groupby("day").agg(
