@@ -64,7 +64,7 @@ except ValueError:
 main_df = df[(df["order_purchase_timestamp"].dt.date >= start_date) & 
              (df["order_purchase_timestamp"].dt.date <= end_date)]
 
-top_n = st.sidebar.slider("Tampilkan Top N Kategori", min_value=5, max_value=20, value=10)
+top_n = st.sidebar.slider("Tampilkan Top Kategori", min_value=5, max_value=20, value=10)
 
 revenue_by_cat = (
     main_df.groupby("product_category_name_english")["price"]
@@ -150,7 +150,7 @@ else:
 
 st.markdown("---")
 
-st.header("Pertanyaan 2: Analisis Pertumbuhan Revenue")
+st.header("Pertanyaan 2: Analisis Performa Penjualan")
 
 main_df_comp = main_df.copy()
 available_years = sorted(main_df_comp['order_purchase_timestamp'].dt.year.unique())
