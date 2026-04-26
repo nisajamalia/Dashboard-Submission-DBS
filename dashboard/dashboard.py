@@ -153,66 +153,73 @@ else:
 
 st.markdown("---")
 
-st.header("Pertanyaan 2: Performa Penjualan dan Revenue")
+st.header("Pertanyaan 2: Analisis Pertumbuhan Revenue")
 
-# 1. Persiapan Data: Ekstrak tahun dan hitung revenue per kategori per tahun
-main_df_yearly = main_df.copy()
-main_df_yearly['order_year'] = main_df_yearly['order_purchase_timestamp'].dt.year
+# 1. Identifikasi Mode Perbandingan (Tahunan atau Bulanan)
+main_df_comp = main_df.copy()
+available_years = sorted(main_df_comp['order_purchase_timestamp'].dt.year.unique())
+available_months = sorted(main_df_comp['order_purchase_timestamp'].dt.to_period('M').unique())
 
-# Filter hanya tahun 2017 dan 2018
-df_yearly = main_df_yearly[main_df_yearly['order_year'].isin([2017, 2018])]
+comp_mode = None
+if len(available_years) >= 2:
+    comp_mode = "Tahunan"
+    p_start = available_years[0]
+    p_end = available_years[-1]
+    main_df_comp['period'] = main_df_comp['order_purchase_timestamp'].dt.year
+elif len(available_months) >= 2:
+    comp_mode = "Bulanan"
+    p_start = available_months[0]
+    p_end = available_months[-1]
+    # Konversi ke string untuk label dan pivot
+    main_df_comp['period'] = main_df_comp['order_purchase_timestamp'].dt.to_period('M').astype(str)
+    p_start = str(p_start)
+    p_end = str(p_end)
 
-if not df_yearly.empty and len(df_yearly['order_year'].unique()) > 1:
-    # Grouping berdasarkan tahun dan kategori
-    revenue_comparison = df_yearly.groupby(['order_year', 'product_category_name_english'])['price'].sum().reset_index()
-
-    # Pivot data agar tahun menjadi kolom untuk memudahkan perhitungan selisih (growth)
-    pivot_revenue = revenue_comparison.pivot(index='product_category_name_english', columns='order_year', values='price').fillna(0)
+if comp_mode:
+    st.subheader(f"Perbandingan Pertumbuhan ({comp_mode}): {p_start} vs {p_end}")
     
-    # Pastikan kedua tahun ada dalam kolom sebelum menghitung growth
-    if 2017 in pivot_revenue.columns and 2018 in pivot_revenue.columns:
-        pivot_revenue['revenue_growth'] = pivot_revenue[2018] - pivot_revenue[2017]
+    # Filter data hanya untuk dua titik waktu yang dibandingkan
+    df_comp = main_df_comp[main_df_comp['period'].isin([p_start, p_end])]
+    revenue_comparison = df_comp.groupby(['period', 'product_category_name_english'])['price'].sum().reset_index()
+
+    # Pivot data untuk menghitung growth
+    pivot_revenue = revenue_comparison.pivot(index='product_category_name_english', columns='period', values='price').fillna(0)
+    
+    # Pastikan kedua kolom ada sebelum menghitung selisih
+    if p_start in pivot_revenue.columns and p_end in pivot_revenue.columns:
+        pivot_revenue['revenue_growth'] = pivot_revenue[p_end] - pivot_revenue[p_start]
         pivot_revenue = pivot_revenue.sort_values(by='revenue_growth', ascending=False)
 
-        # 2. Visualisasi Perbandingan Total Revenue 2017 vs 2018
-        st.subheader("Perbandingan Total Revenue 2017 vs 2018")
-        total_rev_2017 = pivot_revenue[2017].sum()
-        total_rev_2018 = pivot_revenue[2018].sum()
+        # 2. Visualisasi Perbandingan Total Revenue
+        total_s = pivot_revenue[p_start].sum()
+        total_e = pivot_revenue[p_end].sum()
 
-        fig_yearly, ax_yearly = plt.subplots(figsize=(10, 6))
+        fig_comp, ax_comp = plt.subplots(figsize=(10, 6))
         colors = ['#A3C1AD', '#4682B4']
-        bars = ax_yearly.bar(['2017', '2018'], [total_rev_2017, total_rev_2018], color=colors)
+        ax_comp.bar([str(p_start), str(p_end)], [total_s, total_e], color=colors)
 
-        # Tambahkan label nilai di atas bar
-        for bar in bars:
-            yval = bar.get_height()
-            ax_yearly.text(bar.get_x() + bar.get_width()/2, yval + (max(total_rev_2017, total_rev_2018) * 0.01), 
-                           format_currency(yval), ha='center', va='bottom', fontweight='bold')
+        for i, v in enumerate([total_s, total_e]):
+            ax_comp.text(i, v + (max(total_s, total_e) * 0.01), 
+                           format_currency(v), ha='center', va='bottom', fontweight='bold')
 
-        ax_yearly.set_title('Perbandingan Total Revenue 2017 vs 2018', fontsize=14, pad=20)
-        ax_yearly.set_ylabel('Total Revenue (R$)', fontsize=12)
-        ax_yearly.yaxis.set_major_formatter(mticker.FuncFormatter(lambda x, _: format_currency(x)))
-        st.pyplot(fig_yearly)
+        ax_comp.set_title(f'Total Revenue: {p_start} vs {p_end}', fontsize=14, pad=20)
+        ax_comp.set_ylabel('Total Revenue (R$)', fontsize=12)
+        ax_comp.yaxis.set_major_formatter(mticker.FuncFormatter(lambda x, _: format_currency(x)))
+        st.pyplot(fig_comp)
         plt.close()
 
-        # 3. Visualisasi Top 10 Kategori dengan Kenaikan Revenue Tertinggi
-        st.subheader("Top 10 Kategori Produk dengan Kenaikan Revenue Terbesar")
+        # 3. Visualisasi Top 10 Kategori dengan Kenaikan Revenue Terbesar
+        st.subheader(f"Top 10 Kategori dengan Kenaikan Terbesar")
         top_growth = pivot_revenue.head(10)
 
         fig_growth, ax_growth = plt.subplots(figsize=(12, 8))
-        sns.barplot(
-            x=top_growth['revenue_growth'], 
-            y=top_growth.index, 
-            palette='viridis',
-            ax=ax_growth
-        )
+        sns.barplot(x=top_growth['revenue_growth'], y=top_growth.index, palette='viridis', ax=ax_growth)
 
-        ax_growth.set_title('Top 10 Kategori Produk dengan Kenaikan Revenue Terbesar (2017 ke 2018)', fontsize=14)
-        ax_growth.set_xlabel('Kenaikan Revenue (R$)', fontsize=12)
+        ax_growth.set_title(f'Kenaikan Revenue per Kategori ({p_start} ke {p_end})', fontsize=14)
+        ax_growth.set_xlabel('Selisih Revenue (R$)', fontsize=12)
         ax_growth.set_ylabel('Kategori Produk', fontsize=12)
         ax_growth.xaxis.set_major_formatter(mticker.FuncFormatter(lambda x, _: format_currency(x)))
 
-        # Tambahkan angka growth di ujung bar
         for i, v in enumerate(top_growth['revenue_growth']):
             ax_growth.text(v + (top_growth['revenue_growth'].max() * 0.01), i, 
                            f"+{format_currency(v)}", va='center', fontsize=10)
@@ -221,17 +228,43 @@ if not df_yearly.empty and len(df_yearly['order_year'].unique()) > 1:
         st.pyplot(fig_growth)
         plt.close()
 
-        # Menampilkan ringkasan data
-        st.subheader("Ringkasan Kenaikan Revenue per Kategori")
-        summary_display = top_growth[[2017, 2018, 'revenue_growth']].head(10).copy()
-        summary_display[2017] = summary_display[2017].map(lambda x: format_currency(x))
-        summary_display[2018] = summary_display[2018].map(lambda x: format_currency(x))
-        summary_display['revenue_growth'] = summary_display['revenue_growth'].map(lambda x: f"+{format_currency(x)}")
-        st.dataframe(summary_display, use_container_width=True, hide_index=True)
+        with st.expander("Lihat Detail Ringkasan"):
+            summary_display = top_growth[[p_start, p_end, 'revenue_growth']].copy()
+            summary_display[p_start] = summary_display[p_start].map(format_currency)
+            summary_display[p_end] = summary_display[p_end].map(format_currency)
+            summary_display['revenue_growth'] = summary_display['revenue_growth'].map(lambda x: f"+{format_currency(x)}")
+            st.dataframe(summary_display, use_container_width=True, hide_index=True)
     else:
-        st.warning("Data perbandingan tahun 2017 dan 2018 tidak tersedia lengkap pada filter rentang waktu ini.")
+        st.warning("Data perbandingan tidak mencukupi untuk filter yang dipilih.")
+
 else:
-    st.info("Pilih rentang waktu yang mencakup tahun 2017 dan 2018 untuk melihat perbandingan tahunan.")
+    # Fallback jika hanya satu bulan: Tampilkan tren harian
+    st.subheader("Tren Performa Penjualan & Revenue Harian")
+    main_df['day'] = main_df['order_purchase_timestamp'].dt.date
+    daily_perf = main_df.groupby("day").agg(
+        order_count=("order_id", "nunique"),
+        revenue=("price", "sum")
+    ).reset_index()
+
+    fig_daily, ax_rev = plt.subplots(figsize=(12, 5))
+    ax_order = ax_rev.twinx()
+
+    ax_rev.plot(daily_perf["day"], daily_perf["revenue"], color="#3498db", label="Revenue", linewidth=2)
+    ax_order.bar(daily_perf["day"], daily_perf["order_count"], color="#e67e22", alpha=0.3, label="Order Count")
+
+    ax_rev.set_ylabel("Total Revenue (R$)", color="#3498db", fontweight="bold")
+    ax_order.set_ylabel("Total Orders", color="#e67e22", fontweight="bold")
+    ax_rev.yaxis.set_major_formatter(mticker.FuncFormatter(lambda x, _: format_currency(x)))
+
+    plt.title("Performa Penjualan & Revenue Harian", fontweight="bold")
+    plt.xticks(rotation=45)
+    plt.tight_layout()
+    st.pyplot(fig_daily)
+    plt.close()
+    
+    st.info("Pilih rentang waktu minimal 2 bulan untuk melihat analisis perbandingan pertumbuhan.")
+
+
 
 
 st.markdown("---")
