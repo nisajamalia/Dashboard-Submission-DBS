@@ -6,12 +6,12 @@ import matplotlib.ticker as mticker
 import seaborn as sns
 import os
 
-KURS = 3000 
-
-def format_idr(val, decimals=0):
+KURS = 1 
+ 
+def format_currency(val, decimals=0):
     if decimals == 0:
-        return f"Rp {val:,.0f}".replace(",", ".")
-    return f"Rp {val:,.{decimals}f}".replace(",", "X").replace(".", ",").replace("X", ".")
+        return f"R$ {val:,.0f}".replace(",", ".")
+    return f"R$ {val:,.{decimals}f}".replace(",", "X").replace(".", ",").replace("X", ".")
 
 st.set_page_config(
     page_title="E-Commerce Analytics Dashboard",
@@ -96,10 +96,10 @@ total_cust   = main_df["customer_unique_id"].nunique()
 avg_order    = total_rev / total_orders if total_orders > 0 else 0
 
 col1, col2, col3, col4 = st.columns(4)
-col1.metric("Total Revenue", format_idr(total_rev))
+col1.metric("Total Revenue", format_currency(total_rev))
 col2.metric("Total Orders", f"{total_orders:,}")
 col3.metric("Unique Customers", f"{total_cust:,}")
-col4.metric("Avg Order Value", format_idr(avg_order, 2))
+col4.metric("Avg Order Value", format_currency(avg_order, 2))
 
 st.markdown("---")
 
@@ -115,10 +115,10 @@ with col_left:
     for bar in bars:
         w = bar.get_width()
         ax1.text(w + total_rev * 0.003, bar.get_y() + bar.get_height() / 2,
-                 format_idr(w), va="center", fontsize=8)
+                 format_currency(w), va="center", fontsize=8)
     ax1.set_title(f"Top {top_n} Kategori Produk — Revenue", fontweight="bold", fontsize=12)
-    ax1.set_xlabel("Total Revenue (Rp)")
-    ax1.xaxis.set_major_formatter(mticker.FuncFormatter(lambda x, _: format_idr(x)))
+    ax1.set_xlabel("Total Revenue (R$)")
+    ax1.xaxis.set_major_formatter(mticker.FuncFormatter(lambda x, _: format_currency(x)))
     plt.tight_layout()
     st.pyplot(fig1)
     plt.close()
@@ -126,7 +126,7 @@ with col_left:
 with col_right:
     st.subheader("Tabel Revenue")
     show_df = revenue_by_cat.head(top_n).copy()
-    show_df["total_revenue"] = show_df["total_revenue"].map(lambda x: format_idr(x, 2))
+    show_df["total_revenue"] = show_df["total_revenue"].map(lambda x: format_currency(x, 2))
     show_df.columns = ["Kategori", "Total Revenue"]
     st.dataframe(show_df, use_container_width=True, hide_index=True)
 
@@ -141,8 +141,8 @@ if selected_cats:
         if not d.empty:
             ax2.plot(d["month"], d["price"], marker="o", markersize=4, label=cat)
     ax2.set_title("Tren Revenue Bulanan per Kategori", fontweight="bold")
-    ax2.set_ylabel("Revenue (Rp)")
-    ax2.yaxis.set_major_formatter(mticker.FuncFormatter(lambda x, _: format_idr(x)))
+    ax2.set_ylabel("Revenue (R$)")
+    ax2.yaxis.set_major_formatter(mticker.FuncFormatter(lambda x, _: format_currency(x)))
     ax2.legend(fontsize=8)
     plt.xticks(rotation=30)
     plt.tight_layout()
@@ -155,27 +155,84 @@ st.markdown("---")
 
 st.header("Pertanyaan 2: Performa Penjualan dan Revenue")
 
-st.subheader("Tren Order dan Revenue Bulanan")
-monthly_perf = main_df.groupby("month").agg(
-    order_count=("order_id", "nunique"),
-    revenue=("price", "sum")
-).reset_index()
+# 1. Persiapan Data: Ekstrak tahun dan hitung revenue per kategori per tahun
+main_df_yearly = main_df.copy()
+main_df_yearly['order_year'] = main_df_yearly['order_purchase_timestamp'].dt.year
 
-fig_perf, ax_rev = plt.subplots(figsize=(12, 5))
-ax_order = ax_rev.twinx()
+# Filter hanya tahun 2017 dan 2018
+df_yearly = main_df_yearly[main_df_yearly['order_year'].isin([2017, 2018])]
 
-ax_rev.bar(monthly_perf["month"], monthly_perf["revenue"], color="#3498db", alpha=0.3, label="Revenue")
-ax_order.plot(monthly_perf["month"], monthly_perf["order_count"], color="#e67e22", marker="o", linewidth=2, label="Order Count")
+if not df_yearly.empty and len(df_yearly['order_year'].unique()) > 1:
+    # Grouping berdasarkan tahun dan kategori
+    revenue_comparison = df_yearly.groupby(['order_year', 'product_category_name_english'])['price'].sum().reset_index()
 
-ax_rev.set_ylabel("Total Revenue (Rp)", color="#3498db", fontweight="bold")
-ax_order.set_ylabel("Total Orders", color="#e67e22", fontweight="bold")
-ax_rev.yaxis.set_major_formatter(mticker.FuncFormatter(lambda x, _: format_idr(x)))
+    # Pivot data agar tahun menjadi kolom untuk memudahkan perhitungan selisih (growth)
+    pivot_revenue = revenue_comparison.pivot(index='product_category_name_english', columns='order_year', values='price').fillna(0)
+    
+    # Pastikan kedua tahun ada dalam kolom sebelum menghitung growth
+    if 2017 in pivot_revenue.columns and 2018 in pivot_revenue.columns:
+        pivot_revenue['revenue_growth'] = pivot_revenue[2018] - pivot_revenue[2017]
+        pivot_revenue = pivot_revenue.sort_values(by='revenue_growth', ascending=False)
 
-plt.title("Performa Penjualan & Revenue Bulanan", fontweight="bold")
-plt.xticks(rotation=45)
-plt.tight_layout()
-st.pyplot(fig_perf)
-plt.close()
+        # 2. Visualisasi Perbandingan Total Revenue 2017 vs 2018
+        st.subheader("Perbandingan Total Revenue 2017 vs 2018")
+        total_rev_2017 = pivot_revenue[2017].sum()
+        total_rev_2018 = pivot_revenue[2018].sum()
+
+        fig_yearly, ax_yearly = plt.subplots(figsize=(10, 6))
+        colors = ['#A3C1AD', '#4682B4']
+        bars = ax_yearly.bar(['2017', '2018'], [total_rev_2017, total_rev_2018], color=colors)
+
+        # Tambahkan label nilai di atas bar
+        for bar in bars:
+            yval = bar.get_height()
+            ax_yearly.text(bar.get_x() + bar.get_width()/2, yval + (max(total_rev_2017, total_rev_2018) * 0.01), 
+                           format_currency(yval), ha='center', va='bottom', fontweight='bold')
+
+        ax_yearly.set_title('Perbandingan Total Revenue 2017 vs 2018', fontsize=14, pad=20)
+        ax_yearly.set_ylabel('Total Revenue (R$)', fontsize=12)
+        ax_yearly.yaxis.set_major_formatter(mticker.FuncFormatter(lambda x, _: format_currency(x)))
+        st.pyplot(fig_yearly)
+        plt.close()
+
+        # 3. Visualisasi Top 10 Kategori dengan Kenaikan Revenue Tertinggi
+        st.subheader("Top 10 Kategori Produk dengan Kenaikan Revenue Terbesar")
+        top_growth = pivot_revenue.head(10)
+
+        fig_growth, ax_growth = plt.subplots(figsize=(12, 8))
+        sns.barplot(
+            x=top_growth['revenue_growth'], 
+            y=top_growth.index, 
+            palette='viridis',
+            ax=ax_growth
+        )
+
+        ax_growth.set_title('Top 10 Kategori Produk dengan Kenaikan Revenue Terbesar (2017 ke 2018)', fontsize=14)
+        ax_growth.set_xlabel('Kenaikan Revenue (R$)', fontsize=12)
+        ax_growth.set_ylabel('Kategori Produk', fontsize=12)
+        ax_growth.xaxis.set_major_formatter(mticker.FuncFormatter(lambda x, _: format_currency(x)))
+
+        # Tambahkan angka growth di ujung bar
+        for i, v in enumerate(top_growth['revenue_growth']):
+            ax_growth.text(v + (top_growth['revenue_growth'].max() * 0.01), i, 
+                           f"+{format_currency(v)}", va='center', fontsize=10)
+
+        plt.tight_layout()
+        st.pyplot(fig_growth)
+        plt.close()
+
+        # Menampilkan ringkasan data
+        st.subheader("Ringkasan Kenaikan Revenue per Kategori")
+        summary_display = top_growth[[2017, 2018, 'revenue_growth']].head(10).copy()
+        summary_display[2017] = summary_display[2017].map(lambda x: format_currency(x))
+        summary_display[2018] = summary_display[2018].map(lambda x: format_currency(x))
+        summary_display['revenue_growth'] = summary_display['revenue_growth'].map(lambda x: f"+{format_currency(x)}")
+        st.dataframe(summary_display, use_container_width=True, hide_index=True)
+    else:
+        st.warning("Data perbandingan tahun 2017 dan 2018 tidak tersedia lengkap pada filter rentang waktu ini.")
+else:
+    st.info("Pilih rentang waktu yang mencakup tahun 2017 dan 2018 untuk melihat perbandingan tahunan.")
+
 
 st.markdown("---")
 st.header("Analisis Tambahan: Loyalitas & RFM")
@@ -211,10 +268,10 @@ with col_b:
         sc = ax4.scatter(multi["order_count"], multi["total_spent"],
                          alpha=0.55, c=multi["total_spent"], cmap="YlOrRd",
                          edgecolors="white", linewidth=0.3, s=55)
-        plt.colorbar(sc, ax=ax4, label="Total Spent (Rp)")
+        plt.colorbar(sc, ax=ax4, label="Total Spent (R$)")
         ax4.set_xlabel("Jumlah Order")
-        ax4.set_ylabel("Total Pengeluaran (Rp)")
-        ax4.yaxis.set_major_formatter(mticker.FuncFormatter(lambda x, _: format_idr(x)))
+        ax4.set_ylabel("Total Pengeluaran (R$)")
+        ax4.yaxis.set_major_formatter(mticker.FuncFormatter(lambda x, _: format_currency(x)))
         ax4.set_title("Loyalitas: Frekuensi vs Total Belanja", fontweight="bold", fontsize=11)
         plt.tight_layout()
         st.pyplot(fig4)
@@ -229,7 +286,7 @@ top_loyal = (
 )
 top_loyal["Rank"] = range(1, len(top_loyal) + 1)
 top_loyal["customer_unique_id"] = top_loyal["customer_unique_id"].str[:16] + "..."
-top_loyal["total_spent"] = top_loyal["total_spent"].map(lambda x: format_idr(x, 2))
+top_loyal["total_spent"] = top_loyal["total_spent"].map(lambda x: format_currency(x, 2))
 top_loyal = top_loyal.rename(columns={
     "customer_unique_id": "Customer ID",
     "order_count": "Jumlah Order",
@@ -292,7 +349,7 @@ with col_rfm_table:
     )
     seg_summary["Avg_Recency"]   = seg_summary["Avg_Recency"].map("{:.0f} hari".format)
     seg_summary["Avg_Frequency"] = seg_summary["Avg_Frequency"].map("{:.1f}x".format)
-    seg_summary["Avg_Monetary"]  = seg_summary["Avg_Monetary"].map(lambda x: format_idr(x, 2))
+    seg_summary["Avg_Monetary"]  = seg_summary["Avg_Monetary"].map(lambda x: format_currency(x, 2))
     st.dataframe(seg_summary, use_container_width=True, hide_index=True)
 
 st.caption("Dashboard dibuat menggunakan Streamlit · E-Commerce Public Dataset (Olist)")
